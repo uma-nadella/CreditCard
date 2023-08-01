@@ -1,0 +1,195 @@
+module TestCreditCard where
+
+
+import Daml.Script
+import DA.Date
+-- CardApplication Type Calss /Instance and Deriving /Custom Type Class
+import CardApplication
+import CreditCard
+
+testApp :  Script ()
+testApp =  script do
+    {-  Allocating Parties 
+        bank - To provide Approve/Reject and Provide Credit Cards upon Approval
+        uma - Party/Customer applied for Credit Card
+        neerav - Party/Customer applied for Credit Card
+        freshco - Party/Shopkeeper/Outlet where the Customer using the Credit Card
+    -}
+    -- Allocating Parties --------------
+    bank <- allocatePartyWithHint "HDFC" (PartyIdHint "HDFC")
+    uma <- allocatePartyWithHint "Uma" (PartyIdHint "Uma")   
+    neerav <- allocatePartyWithHint "Neerav" (PartyIdHint "Neerav") 
+    freshco <- allocatePartyWithHint "FreshCo" (PartyIdHint "FreshCo") 
+    -- Constructs User Id's Text
+    hdfcId  <-validateUserId "HDFC"
+    umaId <- validateUserId "Uma"
+    neeravId  <-validateUserId "Neerav"
+    freshcoId <- validateUserId "FreshCo"
+    
+    
+    -- create users with the given rights 
+    createUser (User hdfcId (Some bank)) [CanActAs bank]
+    createUser (User umaId (Some uma)) [CanActAs uma]
+    createUser (User neeravId (Some neerav)) [CanActAs neerav]
+    createUser (User freshcoId (Some freshco)) [CanActAs freshco]
+
+    let 
+        -- Defining Bank Data
+        bankData1 = BankData with
+          issuer = bank 
+          bankName = "HDFC BANK Limited"
+          email = "hdfcbank@hdfc.com"
+          mobile = Some "+91 9907 984434"   
+        -- Personal Details of the Customer
+        pDetails1 = PersonalDetails with
+          firstName =  "Uma"
+          middleName =  "Devi"
+          lastName = "Nadella"
+          nameOnCard = "Uma Devi Nadella" 
+          age = 38
+          genderMale = False
+          genderFemale = True
+          dob = date 1984 Aug 06
+          doa = date 2023 Jul 30
+          nationality = "Indian"
+          pan = "AGYPN1434B"
+          qualificationPG = True
+          qualificationGraduate = True
+          married = True
+        -- Assing values to the Present/Current  Address of Customer
+        raddress1 = Address with
+          address = "Uma Nadella, E-21,Zonasha Vista" 
+          landmark = "Dinne Anjaneyaswamy Temple Road"
+          city = "Bangalore"
+          pin = 560102
+          state = "Karnataka"
+          mobileNo = 7795698395
+          email = "umadevi.nadela@gmail.com"
+        -- Assing values to the Permanent Address of Customer
+        paddress1 = Address with
+          address = "Uma Nadella, 16/1" 
+          landmark = "Ramalayam Temple Road"
+          city = "Marampalli"
+          pin = 534112
+          state = "Andhra Pradesh"
+          mobileNo = 7795698395
+          email = "umadevi.nadela@gmail.com"
+
+        -- First Customer Inputs for Applying Credit Card 
+        umadevi =  Customer  with
+          name = uma 
+          --applicationNumber = "1001"
+          cardType = VisaPlatinum
+          annualIncome = 500000.00
+          documentsProvided = True
+          personalDetails = pDetails1
+          residentialAddress = raddress1
+          permanentAddress = paddress1
+        ------------------------------------------------------------
+        -- Personal Details of the Customer for second Customer
+        pDetails2 = PersonalDetails with
+          firstName =  "Neerav"
+          middleName =  "Raj"
+          lastName = "Sunkala"
+          nameOnCard = "Neerav Raj Sunkala" 
+          age = 55
+          genderMale = True
+          genderFemale = False
+          dob = date 1969 Aug 16
+          doa = date 2023 Jul 30
+          nationality = "Indian"
+          pan = "BDWPN1434V"
+          qualificationPG = True
+          qualificationGraduate = True
+          married = True
+        -- Assing values to the Present/Current  Address of Second Customer
+        raddress2 = Address with
+          address = "Neerav Raj Sunkala, E-21,Zee Sappire" 
+          landmark = "RajBhavan Road"
+          city = "Delhi"
+          pin = 500107
+          state = "Haryana"
+          mobileNo = 7795677395
+          email = "neeravraj@gmail.com"
+         -- Assing values to the Permanent Address of Second Customer
+        paddress2 = Address with
+          address = "Neerav Raj Sunkala, 171/14" 
+          landmark = "Malgudi Road"
+          city = "Andhaj"
+          pin = 534002
+          state = "Haryan"
+          mobileNo = 7795677395
+          email = "neeravraj@gmail.com"
+        -- Second Customer Information for Applying Credit Card/Submit Credit Card Application
+        neeravraj =  Customer  with
+          name = neerav 
+          cardType = VisaPlatinum
+          annualIncome = 100000.00
+          documentsProvided = True
+          personalDetails = pDetails2
+          residentialAddress = raddress2
+          permanentAddress = paddress2
+    -- Customer1 "uma" Submitting Credit Card Application 1001 with Bank  
+    app_Cid1 <- submit uma do 
+        createCmd CreditCardApplication with
+          bank = bankData1
+          applicationNumber = "1001"
+          customer = umadevi
+    -- Customer2 "neerav" Submitting Credit Card Application 1002 with Bank  
+    app_Cid2 <- submit neerav do 
+        createCmd CreditCardApplication with
+          bank = bankData1
+          applicationNumber = "1002"
+          customer = neeravraj 
+   
+    -- Bank Approves the Customer Application and provide Credit Card
+    card_Cid1 <- submit bank do
+  
+        exerciseCmd app_Cid1 ApproveApplication with
+          reward = CashBack
+          creditLimit = 50000.00
+          nameoncard = "Uma Devi Nadella"
+          expiryDate =  date 2027 Aug 30
+          cardNumber = 7789668966789990
+          currency = "INR"
+          --cardBalance = 50000.00
+    -- Querying for CreditCard to record Spent Transactions of the Card
+    Some (cid1,_)<- queryContractKey @CreditCard uma (7789668966789990,uma) 
+    -- Customer Spent on Outlet     
+    submit uma do
+        exerciseCmd cid1 SpentOutlet with
+            cardId = cid1
+            amountSpent = 500.00
+            billNumber = 123456
+            shopKeeper = freshco
+            purchaseDate = date 2022 Aug 01
+    -- Happy Path -Bank That Rejects Customer Application "1002"
+    submit bank do
+        exerciseCmd app_Cid2 RejectApplication  
+    
+    --unhappy path1 - Bank Approving  Application which already Approved
+    -- Attempt to exercise a consumed contract (CreditCard:CreditCardApplication)
+    
+    submitMustFail bank do
+        --exerciseCmd app_Cid1 ApproveApplication
+        exerciseCmd app_Cid1 ApproveApplication with
+          reward = CashBack
+          creditLimit = 50000.00
+          nameoncard = "Uma Devi Nadella"
+          expiryDate =  date 2027 Aug 30
+          cardNumber = 7789668966789990
+          currency = "INR"
+        
+    -- unhappy path2 - Customer "Neerav" Rejecting Application which already Archived
+    -- Attempt to exercise a consumed contract  (CreditCard:CreditCardApplication)
+    
+    submitMustFail neerav do
+        exerciseCmd app_Cid2 RejectApplication
+    
+    -- unhappy path3 - Customer "Uma" Rejecting Application which is of 
+    -- another Customer
+    -- Attempt to exercise a consumed contract (CreditCard:CreditCardApplication)
+    submitMustFail uma do
+        exerciseCmd app_Cid2 RejectApplication
+    
+    return ()

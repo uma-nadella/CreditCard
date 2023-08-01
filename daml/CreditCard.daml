@@ -1,0 +1,124 @@
+module CreditCard where
+
+
+--import Daml.Script
+--import DA.Date
+-- CardApplication Type Calss /Instance and Deriving /Custom Type Class
+import CardApplication
+
+-- Defining Enum Constant for Card Rewards Points Type
+data RewardType = Points | CashBack 
+  deriving (Show, Eq)
+
+type SubmitApplicationId = ContractId CreditCardApplication
+
+-- Template to Apply for credit Card 
+template CreditCardApplication
+  with 
+    customer : Customer
+    bank : BankData
+    applicationNumber : Text
+  where 
+    signatory customer.name
+    observer bank.issuer
+    -- Defining Maintainer and Key 
+    key(applicationNumber,customer.name):(Text,Party)
+    maintainer key._2
+    -- Choice Customer to submit Credit Card Application
+    choice SubmitApplication : ContractId CreditCardApplication 
+        controller customer.name
+        do
+            create this with
+              bank = bank
+              customer = customer
+    -- Choice that Bank approve Credit Card Application and creates
+    -- Credit for for Customer/Applicant
+    choice ApproveApplication : ContractId CreditCard with
+          reward: RewardType
+          creditLimit: Decimal 
+          nameoncard : Text
+          expiryDate: Date
+          cardNumber : Int
+          currency : Text
+
+        controller bank.issuer 
+        do 
+            -- Create and Assigns the Credit Card to User
+            create CreditCard with 
+              customer = customer
+              bank = bank
+              reward = reward
+              creditLimit = creditLimit
+              nameoncard = nameoncard
+              expiryDate =  expiryDate
+              cardNumber = cardNumber
+              currency = currency
+              cardBalance = creditLimit
+    -- Choice that Bank Rejects Credit Card Application 
+                
+    choice RejectApplication : ()
+        controller bank.issuer
+        do 
+            pure()
+-- Template to record Transactions on Credit Card in Outlets  
+template Transaction 
+  with 
+    --cardRef : ContractId CreditCard
+    shopKeeper : Party
+    customer : Customer
+    billNumber : Int
+    amountSpent : Decimal 
+    purchaseDate : Date
+  where 
+    signatory customer.name
+    observer shopKeeper
+    
+-- Template for Credit Card Information
+template CreditCard
+  with 
+    customer : Customer
+    bank : BankData
+    reward : RewardType
+    creditLimit: Decimal 
+    nameoncard : Text
+    expiryDate: Date
+    cardNumber : Int
+    currency : Text
+    cardBalance : Decimal 
+  where 
+    signatory customer.name,bank.issuer 
+    key(cardNumber,customer.name):(Int,Party)
+    maintainer key._2
+-- Choice to record transactions on Spending Credit Card
+    nonconsuming choice SpentOutlet : ContractId CreditCard with
+          cardId : ContractId CreditCard
+          billNumber : Int
+          shopKeeper : Party
+          amountSpent : Decimal 
+          purchaseDate : Date
+        controller customer.name
+        
+        do 
+          -- Fetching Card Number at the Time of Purchasing
+          c <- fetch @CreditCard cardId
+          -- if the Credit Card not expired then only used in performing Transactions 
+          -- at the time of spending
+          assertMsg "Card has been Expired" (c.expiryDate > purchaseDate)
+          create Transaction with
+              billNumber = billNumber
+              shopKeeper = shopKeeper
+              customer = customer
+              amountSpent = amountSpent
+              purchaseDate = purchaseDate 
+          -- Updating the Credit Card Balance when it's Spent/Used
+          exercise self UpdateBalance with newBalance = cardBalance - amountSpent
+          
+    -- Choice to update Card Balance Upon Card Spent
+    choice UpdateBalance:ContractId CreditCard
+      with
+        newBalance : Decimal
+      controller customer.name
+        do  
+          create this with
+            cardBalance = newBalance    
+    
