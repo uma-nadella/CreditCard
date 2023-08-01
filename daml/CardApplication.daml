@@ -1,0 +1,69 @@
+module CardApplication where
+
+--import Daml.Script
+--import CreditCard 
+
+data CardType = VisaPlatinum |VisaGold |MasterTitanium 
+  deriving (Eq, Show, Ord)
+
+-- BankSignature class for generating Bank signatures
+class BankSignature bankAccount bank o where
+    bankSignature:bankAccount->bank->o 
+
+-- Implementing  BankSignature for BankData type
+instance BankSignature BankData Party (Optional Text) where
+    bankSignature bankAccount bank = 
+      if (bank==bankAccount.issuer) then 
+        Some ("Regards,\n" <> 
+            bankAccount.bankName <> 
+            "\nEmail: " <> bankAccount.email <> " | Mobile: " <> show(Some(bankAccount.mobile))) 
+      else None
+
+----------------------------------------------------------------------    
+data BankData = BankData with
+     issuer : Party
+     bankName : Text
+     email : Text
+     mobile : Optional Text
+      deriving (Show, Eq) 
+data Customer = Customer with
+     name : Party
+     cardType: CardType
+     annualIncome : Numeric 2  
+     documentsProvided : Bool 
+     personalDetails: PersonalDetails
+     residentialAddress: Address
+     permanentAddress: Address
+      deriving (Show, Eq)
+    
+data PersonalDetails = PersonalDetails with
+    firstName: Text
+    middleName : Text
+    lastName : Text
+    nameOnCard : Text
+    age: Int
+    genderMale: Bool
+    genderFemale: Bool
+    dob: Date
+    doa: Date
+    nationality: Text
+    pan: Text
+    qualificationPG: Bool
+    qualificationGraduate: Bool
+    married: Bool
+     deriving (Show, Eq)
+data Address = Address with
+    address : Text
+    landmark : Text
+    city : Text
+    pin : Int
+    state : Text
+    mobileNo : Int
+    email : Text
+      deriving (Show, Eq)
+data ResidentialAddress = ResidentialAddress with
+    raddress : Address
+    
+data PermanentAddress = PermanentAddress with
+    paddress : Address
+
